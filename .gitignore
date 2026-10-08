@@ -1,0 +1,32 @@
+# Build artifacts
+build/
+*.o
+*.out
+*.a
+*.so
+vector_dot_sequential
+vector_dot_mpi
+mpi_test
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Temporary/editor files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Local benchmark scratch files
+results/raw/*_scratch.csv
+
+# VM / large binary files
+*.vmdk
+*.iso
+*.ova
+*.vmem
+*.vmss
+
+# Environment/local secrets
+.env

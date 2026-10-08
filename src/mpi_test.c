@@ -1,0 +1,25 @@
+#define _POSIX_C_SOURCE 200809L
+
+#include <stdio.h>
+#include <mpi.h>
+#include <unistd.h>
+
+int main(int argc, char *argv[])
+{
+    int rank, size;
+    char hostname[256];
+
+    MPI_Init(&argc, &argv);
+
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    gethostname(hostname, sizeof(hostname));
+
+    printf("Rank %d of %d running on %s\n",
+           rank, size, hostname);
+
+    MPI_Finalize();
+
+    return 0;
+}

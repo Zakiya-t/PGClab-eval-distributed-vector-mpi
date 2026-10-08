@@ -1,254 +1,461 @@
-Distributed Vector Processing using MPI
-Parallel Computing Laboratory – Experiment 5
-Problem Statement: Distributed Vector Processing – MPI – Divide a large vector among processes and perform computations.
+# Distributed Vector Processing using MPI
 
-1. Problem Statement
-Given two vectors A and B of size N, calculate their dot product using:
-Dot(A, B) = Σ A[i] × B[i]
-The MPI implementation must divide the vectors among three MPI processes. Each process computes the dot product of its local portion, and the partial results are combined to obtain the final dot product.
-For the official benchmark, both vectors are initialized with 1.0, therefore:
-Expected Dot Product = N
-The MPI result must match the sequential result for every tested vector size.
-2. Objectives
-1. Understand distributed vector processing using MPI.
-2. Implement vector dot product sequentially.
-3. Implement the same computation using MPI.
-4. Understand MPI processes and ranks.
-5. Distribute vector data using MPI_Scatter.
-6. Perform local dot-product computations independently.
-7. Combine partial results using MPI_Reduce with MPI_SUM.
-8. Compare sequential and MPI execution times.
-9. Calculate speedup and parallel efficiency.
-10. Analyze the effect of distributed communication and VM overhead on performance.
-3. Configuration
-3.1 Software
-- Ubuntu Linux
+## Problem Statement
+
+Given two vectors **A** and **B** of size **N**, calculate their dot product using:
+
+1. Sequential processing.
+2. Distributed MPI processing using **three MPI processes**.
+
+The vectors must be divided among the processes, each process must compute the dot product of its local portion, and the partial results must be combined to obtain the final dot product. The MPI result must match the sequential result. Performance is evaluated for vector sizes **600, 1200, 1800, 2400, and 3000**.
+
+---
+
+## Objectives
+
+- Implement vector dot product using sequential processing.
+- Implement distributed vector processing using MPI.
+- Understand MPI processes, ranks, and distributed memory.
+- Divide vector data equally among three MPI processes.
+- Use `MPI_Scatter` to distribute vector elements.
+- Perform local dot-product computation independently on each process.
+- Use `MPI_Reduce` with `MPI_SUM` to combine partial results.
+- Verify MPI results against the expected and sequential results.
+- Measure execution time for different vector sizes.
+- Calculate speedup and parallel efficiency.
+- Analyze the effect of communication and synchronization overhead in distributed computing.
+
+---
+
+## Configuration
+
+### Hardware and Virtual Machines
+
+| Component | Master | Worker 1 | Worker 2 |
+|---|---|---|---|
+| Operating System | Ubuntu | Ubuntu | Ubuntu |
+| CPU | 4 vCPU | 4 vCPU | 4 vCPU |
+| RAM | 4.8 GiB | 4.8 GiB | 4.8 GiB |
+| MPI Role | Rank 0 | Rank 1 | Rank 2 |
+| IP Address | `192.168.217.128` | `192.168.217.130` | `192.168.217.131` |
+
+### Software
+
 - GCC
-- GNU Make
-- OpenSSH Server
 - Open MPI
-- VMware Workstation / equivalent virtualization platform
-Install the required packages on all three VMs:
-sudo apt update
-sudo apt install openssh-server openmpi-bin libopenmpi-dev gcc make -y
-3.2 Cluster Configuration
-Node	Role	MPI Rank	IP Address	vCPU	RAM
-Master	Master	0	192.168.217.128	4	4.8 GiB
-Worker 1	Worker	1	192.168.217.130	4	4.8 GiB
-Worker 2	Worker	2	192.168.217.131	4	4.8 GiB
+- OpenSSH
+- Make
+- Linux Terminal
+- VMware Workstation
 
+### MPI Configuration
 
-All three VMs are connected through the same VMware network.
-The VMs also expose a Docker bridge interface at 172.17.0.1. MPI execution is explicitly configured to use the VMware network 192.168.217.0/24.
-3.3 Hostfile
-config/hosts contains:
-master slots=1
-worker1 slots=1
-worker2 slots=1
-This configures three MPI execution slots.
-3.4 Architecture
+```text
+Master  → Rank 0 → 192.168.217.128
+Worker1 → Rank 1 → 192.168.217.130
+Worker2 → Rank 2 → 192.168.217.131
+```
+
+Three MPI processes are used in the experiment.
+
+### Vector Configuration
+
+The main vectors are initialized as:
+
+```text
+A = [1, 1, 1, ..., 1]
+B = [1, 1, 1, ..., 1]
+```
+
+Therefore:
+
+```text
+Dot Product = N
+```
+
+The program still performs the actual operation:
+
+```c
+local_dot += local_A[i] * local_B[i];
+```
+
+---
+
+## Architecture
+
+The experiment follows a **Master–Worker distributed architecture**.
+
+```text
                          MASTER
-                       MPI Rank 0
-                    192.168.217.128
-                           |
-                -----------------------
-                |                     |
-                v                     v
-             WORKER 1              WORKER 2
-              MPI Rank 1            MPI Rank 2
-          192.168.217.130      192.168.217.131
-3.5 Process Responsibilities
-Master / Rank 0
-- Creates and initializes vectors A and B.
-- Distributes vector portions using MPI.
-- Receives the final reduced result.
-- Displays execution time and verification status.
-Worker 1 / Rank 1
-- Receives its local portions of A and B.
-- Computes its local dot product.
-- Contributes the partial result to MPI_Reduce.
-Worker 2 / Rank 2
-- Receives its local portions of A and B.
-- Computes its local dot product.
-- Contributes the partial result to MPI_Reduce.
-4. MPI Computation Flow
-               Rank 0 creates A and B
+                        Rank 0
+                   192.168.217.128
                          |
-              -----------------------
-              |                     |
-        MPI_Scatter(A)        MPI_Scatter(B)
-              |                     |
-              -----------+-----------
+                Creates vectors A & B
                          |
-              +----------+----------+
-              |          |          |
-            Rank 0     Rank 1     Rank 2
-              |          |          |
-          Local Dot   Local Dot   Local Dot
-              \          |          /
-               \         |         /
+                 ┌───────┴───────┐
+                 │   MPI_Scatter │
+                 └───────┬───────┘
+                         |
+          ┌──────────────┼──────────────┐
+          ↓              ↓              ↓
+       Rank 0          Rank 1         Rank 2
+       Master          Worker1        Worker2
+          |              |              |
+       Local A         Local A         Local A
+       Local B         Local B         Local B
+          |              |              |
+          └──── Local Dot Product ──────┘
+                         |
                   MPI_Reduce
                     MPI_SUM
-                       |
-                       v
-                Final Dot Product
-                    Rank 0
-For three processes:
-Elements per process = N / 3
-Vector Size	Rank 0	Rank 1	Rank 2
-600	200	200	200
-1200	400	400	400
-1800	600	600	600
-2400	800	800	800
-3000	1000	1000	1000
+                         |
+                         ↓
+                  Final Dot Product
+                     Rank 0
+```
 
+### Process Responsibilities
 
-5. Execution Steps
-5.1 Step 1 – Verify the VMs
-On each VM:
-hostname
-hostname -I
-nproc
-free -h
-Expected hostnames:
-master
-worker1
-worker2
-5.2 Step 2 – Configure Network Resolution
-Add the following mappings to /etc/hosts on all three VMs:
-192.168.217.128 master
-192.168.217.130 worker1
-192.168.217.131 worker2
-Verify from Master:
-ping -c 4 worker1
-ping -c 4 worker2
-The cluster produced successful connectivity with 0% packet loss.
-5.3 Step 3 – Configure Passwordless SSH
-On Master:
-ssh-keygen -t rsa
-ssh-copy-id worker1
-ssh-copy-id worker2
-Verify:
-ssh -o BatchMode=yes worker1 hostname
-ssh -o BatchMode=yes worker2 hostname
-Expected:
-worker1
-worker2
-5.4 Step 4 – Verify MPI Communication
-Create and compile the communication test:
+**Rank 0 — Master**
+
+- Creates and initializes vectors.
+- Participates in computation.
+- Distributes vector portions using `MPI_Scatter`.
+- Receives the combined result through `MPI_Reduce`.
+- Displays final result, verification, and execution time.
+
+**Rank 1 — Worker 1**
+
+- Receives its vector portions.
+- Performs local dot-product computation.
+- Contributes its partial result to `MPI_Reduce`.
+
+**Rank 2 — Worker 2**
+
+- Receives its vector portions.
+- Performs local dot-product computation.
+- Contributes its partial result to `MPI_Reduce`.
+
+---
+
+## Execution Steps
+
+## 1. MPI Communication Test
+
+The first step is to verify that MPI can launch one process on each VM.
+
+### Compile
+
+```bash
 mpicc src/mpi_test.c -o src/mpi_test
-Copy the executable to both workers:
+```
+
+### Copy the executable to Workers
+
+```bash
 scp src/mpi_test worker1:~/mpi_test
 scp src/mpi_test worker2:~/mpi_test
-Run from Master:
-env -u DISPLAY mpirun -np 3 --hostfile config/hosts /home/zakiya/mpi_test
-The MPI communication test successfully verified:
+```
+
+### Run
+
+```bash
+env -u DISPLAY mpirun \
+-np 3 \
+--hostfile ~/distributed-vector-mpi/hosts \
+--mca btl self,tcp \
+--mca btl_tcp_if_include 192.168.217.0/24 \
+--mca oob_tcp_if_include 192.168.217.0/24 \
+/home/zakiya/mpi_test
+```
+
+### Expected Output
+
+```text
 Rank 0 of 3 running on master
 Rank 1 of 3 running on worker1
 Rank 2 of 3 running on worker2
-5.5 Step 5 – Build the Sequential Program
+```
+
+This confirms that the three MPI processes are distributed across the three VMs.
+
+---
+
+# 2. Sequential Implementation
+
+The sequential implementation provides the baseline execution time.
+
+### Source
+
+```text
+src/vector_dot_sequential.c
+```
+
+### Compile
+
+```bash
 gcc -O2 src/vector_dot_sequential.c -o vector_dot_sequential
-Run using:
+```
+
+### Run
+
+```bash
 ./vector_dot_sequential 600
-5.6 Step 6 – Build the MPI Program
-Compile on Master:
+```
+
+The program accepts the vector size as a command-line argument.
+
+Examples:
+
+```bash
+./vector_dot_sequential 600
+./vector_dot_sequential 1200
+./vector_dot_sequential 1800
+./vector_dot_sequential 2400
+./vector_dot_sequential 3000
+```
+
+### Sequential Results
+
+| Vector Size | Dot Product | Execution Time (s) | Verification |
+|---:|---:|---:|---|
+| 600 | 600.00 | 0.000000769 | PASSED |
+| 1200 | 1200.00 | 0.000001483 | PASSED |
+| 1800 | 1800.00 | 0.000001972 | PASSED |
+| 2400 | 2400.00 | 0.000002570 | PASSED |
+| 3000 | 3000.00 | 0.000003204 | PASSED |
+
+---
+
+# 3. MPI Distributed Implementation
+
+The MPI version divides both vectors equally among three processes.
+
+### Source
+
+```text
+src/vector_dot_mpi.c
+```
+
+### Compile
+
+```bash
 mpicc -O2 src/vector_dot_mpi.c -o vector_dot_mpi
-Copy the executable to both workers:
-scp ~/distributed-vector-mpi/vector_dot_mpi worker1:~/vector_dot_mpi
-scp ~/distributed-vector-mpi/vector_dot_mpi worker2:~/vector_dot_mpi
-5.7 Step 7 – Run the MPI Program
-The final MPI execution uses the VMware network explicitly:
-env -u DISPLAY mpirun -np 3 \
---hostfile ~/distributed-vector-mpi/config/hosts \
+```
+
+### Copy Executable to Workers
+
+```bash
+scp vector_dot_mpi worker1:~/vector_dot_mpi
+scp vector_dot_mpi worker2:~/vector_dot_mpi
+```
+
+### Forced VMware Network Execution
+
+The MPI runs use the `192.168.217.x` VMware network rather than the Docker bridge interface.
+
+```bash
+env -u DISPLAY mpirun \
+-np 3 \
+--hostfile ~/distributed-vector-mpi/hosts \
+--mca btl self,tcp \
+--mca btl_tcp_if_include 192.168.217.0/24 \
+--mca oob_tcp_if_include 192.168.217.0/24 \
+/home/zakiya/vector_dot_mpi <VECTOR_SIZE>
+```
+
+### Example
+
+```bash
+env -u DISPLAY mpirun \
+-np 3 \
+--hostfile ~/distributed-vector-mpi/hosts \
 --mca btl self,tcp \
 --mca btl_tcp_if_include 192.168.217.0/24 \
 --mca oob_tcp_if_include 192.168.217.0/24 \
 /home/zakiya/vector_dot_mpi 600
-Change only the final vector size for the other tests:
-1200
-1800
-2400
-3000
-5.8 Step 8 – Run the Required Benchmark Sizes
-The official benchmark uses:
-600, 1200, 1800, 2400, 3000
-The same vector size is used for sequential and MPI execution.
-6. Results
-6.1 Communication Test Result
-The three-process MPI communication test successfully mapped the ranks to the intended VMs:
-MPI Rank	Host
-0	Master
-1	Worker 1
-2	Worker 2
+```
 
+### MPI Processing Flow
 
-6.2 Sequential Results
-All official sequential tests produced the expected dot product and passed correctness verification.
-Vector Size	Dot Product	Execution Time (s)	Verification
-600	600.00	0.000000769	PASSED
-1200	1200.00	0.000001483	PASSED
-1800	1800.00	0.000001972	PASSED
-2400	2400.00	0.000002570	PASSED
-3000	3000.00	0.000003204	PASSED
+For `N = 600`:
 
+```text
+600 / 3 = 200 elements per process
 
-6.3 MPI Results
-All official MPI tests distributed the workload equally among the three processes and passed correctness verification.
-Vector Size	Elements / Process	MPI Time (s)	Dot Product	Verification
-600	200	0.001921705	600.00	PASSED
-1200	400	0.002759280	1200.00	PASSED
-1800	600	0.001386273	1800.00	PASSED
-2400	800	0.002179073	2400.00	PASSED
-3000	1000	0.001537805	3000.00	PASSED
+Rank 0 → 200 elements
+Rank 1 → 200 elements
+Rank 2 → 200 elements
+```
 
+Each process performs:
 
-6.4 Correctness Verification
-For the official benchmark, the vectors contain only 1.0 values. Therefore the expected dot product is exactly N.
-600  → 600.00  → PASSED
-1200 → 1200.00 → PASSED
-1800 → 1800.00 → PASSED
-2400 → 2400.00 → PASSED
-3000 → 3000.00 → PASSED
-The program performs the actual multiplication and accumulation:
+```c
 local_dot += local_A[i] * local_B[i];
-and combines the partial results using MPI_Reduce with MPI_SUM.
-7. Performance Analysis
-7.1 Performance Comparison
-The final comparison below uses the actual measured execution times from the laboratory runs.
-Vector Size	Sequential (s)	MPI (s)	Speedup	Parallel Efficiency
-600	0.000000769	0.001921705	0.000400x	0.0133%
-1200	0.000001483	0.002759280	0.000537x	0.0179%
-1800	0.000001972	0.001386273	0.001423x	0.0474%
-2400	0.000002570	0.002179073	0.001179x	0.0393%
-3000	0.000003204	0.001537805	0.002083x	0.0694%
+```
 
+The partial results are combined using:
 
-7.2 Speedup Formula
-Speedup = Sequential Execution Time / MPI Execution Time
-7.3 Parallel Efficiency Formula
+```c
+MPI_Reduce(..., MPI_SUM, ...)
+```
+
+---
+
+## MPI Results
+
+| Vector Size | Elements / Process | MPI Time (s) | Dot Product | Verification |
+|---:|---:|---:|---:|---|
+| 600 | 200 | 0.001921705 | 600.00 | PASSED |
+| 1200 | 400 | 0.002759280 | 1200.00 | PASSED |
+| 1800 | 600 | 0.001386273 | 1800.00 | PASSED |
+| 2400 | 800 | 0.002179073 | 2400.00 | PASSED |
+| 3000 | 1000 | 0.001537805 | 3000.00 | PASSED |
+
+---
+
+# Performance Analysis
+
+## Performance Metrics
+
+### Speedup
+
+Speedup is calculated as:
+
+```text
+Speedup = Sequential Time / MPI Time
+```
+
+### Parallel Efficiency
+
 For three MPI processes:
-Efficiency = (Speedup / 3) × 100
-7.4 Performance Interpretation
-The MPI implementation demonstrates true distributed-memory processing across three independent virtual machines. The vectors are divided among the three ranks, the local computations are performed independently, and the final result is combined using MPI reduction.
-For the specified benchmark sizes, the actual dot-product computation is extremely small. Consequently, MPI communication, synchronization, process-management, and virtual-network overhead dominate the measured execution time. This is why the sequential implementation is faster for these particular small workloads.
-This result does not indicate an incorrect MPI implementation. It demonstrates an important distributed-computing principle: parallel processing becomes more useful when the computation is large enough to amortize communication and coordination overhead.
-The implementation accepts the vector size as a command-line argument, so the same program can be used for substantially larger vectors without changing the core algorithm.
-7.5 Performance Graphs
-Execution Time Comparison
 
-Speedup
+```text
+Efficiency = Speedup / 3 × 100
+```
 
-Parallel Efficiency
+---
 
-7.6 Performance Summary
-- Sequential processing provides the lowest overhead for the small official workloads.
-- MPI successfully distributes the workload across three VMs, demonstrating distributed-memory execution.
-- MPI_Scatter is used to distribute both vectors.
-- Each rank performs its local dot-product computation independently.
-- MPI_Reduce(MPI_SUM) combines the three partial results.
-- The implementation is scalable in input size because N is provided at runtime.
-- For larger computational workloads, the fixed communication overhead becomes relatively less significant.
-8. Repository Structure
+## Final Performance Comparison
+
+| Vector Size | Sequential Time (s) | MPI Time (s) | Speedup | Efficiency |
+|---:|---:|---:|---:|---:|
+| 600 | 0.000000769 | 0.001921705 | 0.000400× | 0.0133% |
+| 1200 | 0.000001483 | 0.002759280 | 0.000537× | 0.0179% |
+| 1800 | 0.000001972 | 0.001386273 | 0.001423× | 0.0474% |
+| 2400 | 0.000002570 | 0.002179073 | 0.001179× | 0.0393% |
+| 3000 | 0.000003204 | 0.001537805 | 0.002083× | 0.0694% |
+
+> **Note:** The values above are the actual measurements obtained from the three-VM experiment.
+
+---
+
+## Graph 1 — Vector Size vs Execution Time
+
+![Execution Time Comparison](results/graphs/execution_time.png)
+
+### Analysis
+
+The sequential execution time increases gradually as the vector size increases because more vector elements must be processed.
+
+The MPI execution time is higher for these benchmark sizes because the actual dot-product computation is extremely small compared with the overhead introduced by distributed execution. MPI must initialize processes, communicate data using `MPI_Scatter`, synchronize processes, and combine results using `MPI_Reduce`.
+
+Therefore, the graph demonstrates an important characteristic of distributed computing: **parallel execution does not automatically produce lower execution time for small workloads**.
+
+---
+
+## Graph 2 — Vector Size vs Speedup
+
+![Speedup](results/graphs/speedup.png)
+
+### Analysis
+
+The measured speedup values are below `1×` for all five required workloads.
+
+This occurs because:
+
+```text
+Computation time << MPI communication + synchronization overhead
+```
+
+For these relatively small vectors, the sequential program completes the actual arithmetic almost immediately, while MPI still has to perform distributed-system operations.
+
+The implementation nevertheless demonstrates the complete distributed processing workflow and is structured so that the computation can be scaled to larger vector sizes.
+
+---
+
+## Graph 3 — Vector Size vs Parallel Efficiency
+
+![Parallel Efficiency](results/graphs/efficiency.png)
+
+### Analysis
+
+Parallel efficiency is also very low for the required benchmark sizes because the three MPI processes spend a significant proportion of execution time on overhead relative to the small amount of arithmetic work.
+
+The efficiency values therefore reflect the characteristics of the workload rather than a correctness problem in the MPI implementation.
+
+---
+
+## Overall Performance Analysis
+
+The experiment demonstrates the trade-off between **computation and communication overhead** in distributed systems.
+
+For the required vector sizes:
+
+- Sequential execution is faster because the workload is very small.
+- MPI successfully distributes the vector data across three independent processes.
+- `MPI_Scatter` distributes the input vectors.
+- Each process performs its own local computation.
+- `MPI_Reduce(MPI_SUM)` combines the partial dot products.
+- All MPI results exactly match the expected dot product.
+- The measured MPI overhead dominates the small computation for these test cases.
+
+The important advantage of the MPI implementation is that it establishes a **scalable distributed processing architecture**. As the computational workload becomes substantially larger, the ratio of useful computation to communication overhead can increase, making distributed execution more beneficial.
+
+Thus, this experiment demonstrates not only MPI programming, but also an important principle of parallel computing:
+
+> **The effectiveness of parallelism depends on whether the workload is large enough to justify the communication and synchronization overhead.**
+
+---
+
+## Correctness Verification
+
+For the main benchmark vectors:
+
+```text
+A = [1, 1, ..., 1]
+B = [1, 1, ..., 1]
+```
+
+the expected result is:
+
+```text
+Dot Product = N
+```
+
+All required MPI tests passed:
+
+```text
+N = 600   → 600.00 → PASSED
+N = 1200  → 1200.00 → PASSED
+N = 1800  → 1800.00 → PASSED
+N = 2400  → 2400.00 → PASSED
+N = 3000  → 3000.00 → PASSED
+```
+
+The implementation also supports a genuine dot-product operation because the calculation performed is:
+
+```c
+local_dot += local_A[i] * local_B[i];
+```
+
+rather than simply returning the vector size.
+
+---
+
+## Repository Structure
+
+```text
 distributed-vector-mpi/
 │
 ├── README.md
@@ -260,14 +467,15 @@ distributed-vector-mpi/
 │   └── README.md
 │
 ├── src/
-│   ├── mpi_test.c
 │   ├── vector_dot_sequential.c
-│   └── vector_dot_mpi.c
+│   ├── vector_dot_mpi.c
+│   └── mpi_test.c
 │
 ├── scripts/
 │   ├── run_sequential.sh
 │   ├── run_mpi.sh
 │   ├── deploy_mpi.sh
+│   ├── run_benchmark.sh
 │   └── calculate_metrics.py
 │
 ├── docs/
@@ -280,9 +488,12 @@ distributed-vector-mpi/
 │
 ├── results/
 │   ├── raw/
-│   │   └── benchmark_measurements.csv
+│   │   ├── benchmark_measurements.csv
+│   │   └── benchmark_outputs.md
+│   │
 │   ├── processed/
 │   │   └── performance_summary.csv
+│   │
 │   └── graphs/
 │       ├── execution_time.png
 │       ├── speedup.png
@@ -294,14 +505,44 @@ distributed-vector-mpi/
     ├── sequential/
     ├── mpi/
     └── results/
-9. Conclusion
-This experiment successfully implements Distributed Vector Processing using MPI through a distributed vector dot-product workload.
-The experiment establishes a three-node Master–Worker MPI cluster, verifies inter-node communication and passwordless SSH, distributes vector data using MPI_Scatter, performs local dot-product computations on each rank, and combines the partial results using MPI_Reduce(MPI_SUM).
-All required vector sizes produced correct results, and the measured performance demonstrates the effect of communication overhead on small distributed workloads. The project also provides a reusable MPI implementation that accepts the vector size at runtime and can be extended to larger computational workloads.
-10. Author
-Zakiya Tahasildar
-Bhavana B H
-Pradeep Bichagatti
-Abhinandan Belagavi
-B.Tech – Computer Science & Artificial Intelligence
+```
+
+---
+
+## Conclusion
+
+This experiment implements **Distributed Vector Processing using MPI** through a three-node Master–Worker architecture.
+
+The sequential program establishes the baseline, while the MPI implementation distributes vectors across three MPI processes using `MPI_Scatter`. Each process computes a local dot product, and the partial results are combined at Rank 0 using `MPI_Reduce` with `MPI_SUM`.
+
+All five required vector sizes produced correct results, with MPI verification passing in every case.
+
+The performance analysis shows that the mandated small vector sizes do not provide enough computational work to overcome MPI communication and synchronization overhead. This demonstrates an important property of distributed computing: **parallel processing becomes more useful when the workload is sufficiently large relative to the communication cost**.
+
+The project therefore demonstrates the complete MPI workflow of:
+
+```text
+Data Creation
+      ↓
+Data Distribution
+      ↓
+Local Parallel Computation
+      ↓
+Result Reduction
+      ↓
+Correctness Verification
+      ↓
+Performance Analysis
+```
+
+---
+
+## Author
+
+**Zakiya Tahasildar**
+**Bhavana B H**
+**Pradeep Bichagatti**
+**Abhinandan Belagavi**
+
+B.Tech — Computer Science & Artificial Intelligence
 KLE Technological University, Hubballi

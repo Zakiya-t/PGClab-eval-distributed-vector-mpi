@@ -533,10 +533,10 @@ Performance Analysis
 
 ## Author
 
-**Zakiya Tahasildar**
-**Bhavana B H**
-**Pradeep Bichagatti**
-**Abhinandan Belagavi**
+Zakiya Tahasildar
+Bhavana B H
+Pradeep Bichagatti
+Abhinandan Belagavi
 
 B.Tech — Computer Science & Artificial Intelligence
 KLE Technological University, Hubballi

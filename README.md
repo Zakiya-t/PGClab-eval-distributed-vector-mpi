@@ -13,17 +13,11 @@ The vectors must be divided among the processes, each process must compute the d
 
 ## Objectives
 
-- Implement vector dot product using sequential processing.
-- Implement distributed vector processing using MPI.
-- Understand MPI processes, ranks, and distributed memory.
-- Divide vector data equally among three MPI processes.
-- Use `MPI_Scatter` to distribute vector elements.
-- Perform local dot-product computation independently on each process.
-- Use `MPI_Reduce` with `MPI_SUM` to combine partial results.
-- Verify MPI results against the expected and sequential results.
-- Measure execution time for different vector sizes.
-- Calculate speedup and parallel efficiency.
-- Analyze the effect of communication and synchronization overhead in distributed computing.
+1. **Implement Sequential & Distributed Processing:** Develop both sequential C code and Open MPI implementations for vector dot-product computation.
+2. **Distribute Data Across Processes:** Divide vector inputs equally among three MPI processes using `MPI_Scatter`.
+3. **Execute Local Computation & Reduction:** Perform independent local dot-product calculations on each process and combine results using `MPI_Reduce` (`MPI_SUM`).
+4. **Verify Correctness:** Cross-check MPI computation results against sequential output and theoretical expected values.
+5. **Analyze Performance Metrics:** Measure execution times across varying vector sizes to calculate speedup, parallel efficiency, and communication overhead.
 
 ---
 
